@@ -1,0 +1,90 @@
+seed: 42
+
+tokenizer:
+  vocab_size: 2000
+  model_type: "unigram"
+
+paths:
+  data_dir: data
+  processed_dir: data/processed
+  raw_corpus: data/processed/raw_corpus.jsonl
+  raw_qa: data/processed/raw_qa.jsonl
+  tokenizer_corpus: data/processed/tokenizer_corpus.txt
+  tokenizer_model_prefix: data/processed/indic_gov_tokenizer
+  pretrain_pairs: data/processed/pretrain_pairs.jsonl
+  finetune_pairs: data/processed/finetune_pairs.jsonl
+  gov_documents: data/dummy/gov_docs.jsonl
+  tokenizer_model: data/processed/indic_gov_tokenizer.model
+  checkpoint_dir: checkpoints
+  pretrain_checkpoint: checkpoints/pretrain.pt
+  finetune_checkpoint: checkpoints/finetune.pt
+  retrieval_index: data/processed/gov_faiss.index
+  retrieval_meta: data/processed/gov_chunks.jsonl
+
+languages:
+  supported: ["en", "hi", "gu", "ta", "bn", "mr", "te", "kn", "ml", "pa"]
+  default: "en"
+
+model:
+  d_model: 256
+  num_heads: 8
+  num_encoder_layers: 4
+  num_decoder_layers: 4
+  dim_feedforward: 512
+  dropout: 0.1
+  max_len: 256
+  tie_embeddings: true
+
+training:
+  batch_size: 8
+  pretrain_epochs: 5
+  finetune_epochs: 3
+  learning_rate: 0.0003
+  weight_decay: 0.01
+  max_source_length: 128
+  max_target_length: 128
+  grad_clip: 1.0
+  label_smoothing: 0.0
+  device: "auto"
+  num_workers: 0
+
+retrieval:
+  chunk_size: 80
+  chunk_overlap: 20
+  top_k: 4
+  max_documents: 2000
+
+ingestion:
+  indic_jsonl_globs:
+    - "data/multilingual/**/*.jsonl"
+  samanantar_pairs:
+    - src: "en"
+      tgt: "hi"
+      globs:
+        - "data/multilingual/samanantar/en_hi/**/*.tsv"
+    - src: "en"
+      tgt: "gu"
+      globs:
+        - "data/multilingual/samanantar/en_gu/**/*.tsv"
+    - src: "en"
+      tgt: "ta"
+      globs:
+        - "data/multilingual/samanantar/en_ta/**/*.tsv"
+  gov_jsonl_globs:
+    - "data/government/**/*.jsonl"
+  gov_csv_globs:
+    - "data/government/**/*.csv"
+  gov_qa_jsonl_globs:
+    - "data/government/**/*qa*.jsonl"
+  gov_urls_file: "data/government/gov_urls.txt"
+  scrape_timeout: 15
+
+evaluation:
+  max_generation_examples: 100
+
+inference:
+  max_new_tokens: 80
+  temperature: 0.8
+  top_k: 50
+  beam_width: 4
+  decoding_strategy: "beam"

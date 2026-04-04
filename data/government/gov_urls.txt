@@ -1,0 +1,5 @@
+# Add official Indian government URLs here, one per line.
+# Examples:
+# https://www.india.gov.in/
+# https://www.mygov.in/
+# https://egazette.gov.in/
