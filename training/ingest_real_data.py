@@ -9,17 +9,22 @@ from training.data_pipeline import build_finetuning_pairs, build_pretraining_pai
 from training.data_sources import (
     QARecord,
     RawRecord,
+    cap_records_per_language,
     deduplicate_records,
     expand_globs,
+    filter_qa_by_languages,
+    filter_records_by_languages,
     load_government_csv,
     load_government_jsonl,
     load_government_qa_jsonl,
     load_indic_jsonl,
+    load_indic_plain_text,
     load_samanantar_tsv,
     scrape_government_urls,
 )
 from utils.config import load_config
 from utils.io import write_jsonl, write_text
+from utils.lang import normalize_language_code
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,16 +84,28 @@ def main() -> None:
     tokenizer_corpus_path = Path(paths["tokenizer_corpus"])
 
     indic_globs = ingestion.get("indic_jsonl_globs", [])
+    indiccorp_txt_files = ingestion.get("indiccorp_txt_files", [])
     samanantar_pairs = ingestion.get("samanantar_pairs", [])
     gov_jsonl_globs = ingestion.get("gov_jsonl_globs", [])
     gov_csv_globs = ingestion.get("gov_csv_globs", [])
     qa_jsonl_globs = ingestion.get("gov_qa_jsonl_globs", [])
     gov_urls_file = Path(ingestion.get("gov_urls_file", "data/government/gov_urls.txt"))
+    max_lines_per_file = ingestion.get("max_lines_per_file")
+    max_records_per_language = ingestion.get("max_records_per_language")
+
+    supported_languages = [normalize_language_code(language) for language in config.get("languages", {}).get("supported", ["en", "hi", "gu"])]
 
     raw_records: List[RawRecord] = []
     qa_records: List[QARecord] = []
 
     raw_records.extend(load_indic_jsonl(expand_globs(indic_globs), text_fields=("text", "sentence", "content")))
+
+    for item in indiccorp_txt_files:
+        path = Path(str(item.get("path", "")).strip())
+        language = str(item.get("language", "auto"))
+        if not str(path):
+            continue
+        raw_records.extend(load_indic_plain_text(path, language=language, max_lines=max_lines_per_file))
 
     for pair in samanantar_pairs:
         src_lang = str(pair.get("src", "en"))
@@ -105,7 +122,10 @@ def main() -> None:
         if urls:
             raw_records.extend(scrape_government_urls(urls, timeout=int(ingestion.get("scrape_timeout", 15))))
 
+    raw_records = filter_records_by_languages(raw_records, supported_languages)
+    qa_records = filter_qa_by_languages(qa_records, supported_languages)
     raw_records = deduplicate_records(raw_records)
+    raw_records = cap_records_per_language(raw_records, max_records_per_language=max_records_per_language)
 
     output_raw_text.parent.mkdir(parents=True, exist_ok=True)
     output_raw_qa.parent.mkdir(parents=True, exist_ok=True)

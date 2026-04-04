@@ -22,7 +22,7 @@ paths:
   retrieval_meta: data/processed/gov_chunks.jsonl
 
 languages:
-  supported: ["en", "hi", "gu", "ta", "bn", "mr", "te", "kn", "ml", "pa"]
+  supported: ["en", "hi", "gu"]
   default: "en"
 
 model:
@@ -55,6 +55,17 @@ retrieval:
   max_documents: 2000
 
 ingestion:
+  # Keep as null to use all lines, or set an integer for faster experiments.
+  max_lines_per_file: null
+  # Keep as null for full corpus, or set an integer to balance EN/HI/GU volumes.
+  max_records_per_language: null
+  indiccorp_txt_files:
+    - path: "data/multilingual/indiccorp/en.txt"
+      language: "en"
+    - path: "data/multilingual/indiccorp/hi-1.txt"
+      language: "hi"
+    - path: "data/multilingual/indiccorp/gu.txt"
+      language: "gu"
   indic_jsonl_globs:
     - "data/multilingual/**/*.jsonl"
   samanantar_pairs:
@@ -66,10 +77,6 @@ ingestion:
       tgt: "gu"
       globs:
         - "data/multilingual/samanantar/en_gu/**/*.tsv"
-    - src: "en"
-      tgt: "ta"
-      globs:
-        - "data/multilingual/samanantar/en_ta/**/*.tsv"
   gov_jsonl_globs:
     - "data/government/**/*.jsonl"
   gov_csv_globs:

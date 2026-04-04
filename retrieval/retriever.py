@@ -9,6 +9,7 @@ from retrieval.chunking import build_chunks
 from retrieval.vector_store import FaissTextStore, SearchResult
 from utils.config import load_config
 from utils.io import iter_jsonl
+from utils.lang import normalize_language_code
 from utils.text import clean_text
 
 
@@ -45,6 +46,43 @@ def load_government_documents(path: str | Path) -> List[dict]:
     return [record for record in iter_jsonl(path)]
 
 
+def filter_documents_by_languages(documents: List[dict], supported_languages: List[str]) -> List[dict]:
+    """Filter retrieval documents to configured languages only."""
+    normalized_supported = {normalize_language_code(language) for language in supported_languages}
+    output: List[dict] = []
+    for item in documents:
+        language = normalize_language_code(str(item.get("language", "en")))
+        if language not in normalized_supported:
+            continue
+        normalized_item = dict(item)
+        normalized_item["language"] = language
+        output.append(normalized_item)
+    return output
+
+
+def resolve_retrieval_documents(config: dict) -> List[dict]:
+    """Resolve retrieval source with a preference for processed government corpus."""
+    paths = config.get("paths", {})
+    supported_languages = config.get("languages", {}).get("supported", ["en", "hi", "gu"])
+    gov_documents_path = Path(paths.get("gov_documents", "data/dummy/gov_docs.jsonl"))
+    raw_corpus_path = Path(paths.get("raw_corpus", "data/processed/raw_corpus.jsonl"))
+
+    if raw_corpus_path.exists():
+        raw_items = [item for item in iter_jsonl(raw_corpus_path)]
+        # Prefer government-derived records when available.
+        government_only = [
+            item
+            for item in raw_items
+            if str(item.get("source", "")).startswith("gov:") or str(item.get("source", "")).startswith("gov:web")
+        ]
+        if government_only:
+            return filter_documents_by_languages(government_only, supported_languages)
+        if raw_items:
+            return filter_documents_by_languages(raw_items, supported_languages)
+
+    return filter_documents_by_languages(load_government_documents(gov_documents_path), supported_languages)
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Build or query the government retriever")
@@ -61,8 +99,9 @@ def main() -> None:
     index_path = Path(config["paths"]["retrieval_index"])
     meta_path = Path(config["paths"]["retrieval_meta"])
     vectorizer_path = index_path.with_suffix(".pkl")
-    documents_path = Path(config["paths"]["gov_documents"])
-    documents = load_government_documents(documents_path)
+    documents = resolve_retrieval_documents(config)
+    if not documents:
+        raise RuntimeError("No retrieval documents found for configured languages")
     retriever = GovernmentRetriever.from_documents(
         documents,
         chunk_size=int(config["retrieval"]["chunk_size"]),

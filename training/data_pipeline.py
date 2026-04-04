@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterable, List
 
 from utils.io import iter_jsonl, list_files, write_jsonl, write_text
-from utils.lang import add_language_token, detect_language
+from utils.lang import add_language_token, detect_language, normalize_language_code
 from utils.text import clean_text
 
 
@@ -70,10 +70,17 @@ def load_government_qa(path: str | Path) -> List[dict]:
     return records
 
 
-def build_tokenizer_corpus(input_dir: str | Path, output_path: str | Path) -> Path:
+def build_tokenizer_corpus(
+    input_dir: str | Path,
+    output_path: str | Path,
+    supported_languages: list[str] | tuple[str, ...] | set[str] | None = None,
+) -> Path:
     """Merge all raw text corpora into one plain-text file for tokenizer training."""
     input_root = Path(input_dir)
     texts: List[str] = []
+    normalized_supported = None
+    if supported_languages is not None:
+        normalized_supported = {normalize_language_code(language) for language in supported_languages}
     for path in list_files(input_root, suffixes=[".txt", ".jsonl"]):
         if path.name == Path(output_path).name:
             continue
@@ -81,6 +88,10 @@ def build_tokenizer_corpus(input_dir: str | Path, output_path: str | Path) -> Pa
             texts.extend(clean_text(line) for line in path.read_text(encoding="utf-8").splitlines() if clean_text(line))
         elif path.suffix.lower() == ".jsonl":
             for item in iter_jsonl(path):
+                if normalized_supported is not None:
+                    language = normalize_language_code(str(item.get("language", "en")))
+                    if language not in normalized_supported:
+                        continue
                 for key in ("text", "title", "question", "answer", "source_text", "target_text"):
                     value = item.get(key)
                     if isinstance(value, str):

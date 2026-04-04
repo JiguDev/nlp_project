@@ -51,3 +51,7 @@ data/processed/
 .env
 .env.*
 !.env.example
+
+# Ignore everything in the root data directory except for the dummy data
+data/*
+!data/dummy_data/

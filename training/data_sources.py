@@ -5,10 +5,11 @@ import csv
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from collections import defaultdict
 from typing import Iterable, Iterator, List, Sequence
 
 from utils.io import iter_jsonl
-from utils.lang import detect_language
+from utils.lang import detect_language, is_supported_language, normalize_language_code
 from utils.text import clean_text
 
 try:
@@ -67,6 +68,31 @@ def load_indic_jsonl(paths: Sequence[Path], text_fields: Sequence[str] = ("text"
                     )
                     if record is not None:
                         output.append(record)
+    return output
+
+
+def load_indic_plain_text(path: Path, language: str, max_lines: int | None = None) -> List[RawRecord]:
+    """Load line-based plain text corpora such as IndicCorp language shards."""
+    output: List[RawRecord] = []
+    normalized_language = normalize_language_code(language)
+    if not path.exists() or not path.is_file():
+        return output
+    with path.open("r", encoding="utf-8") as handle:
+        for line_index, line in enumerate(handle):
+            text = clean_text(line)
+            if not text:
+                continue
+            if max_lines is not None and len(output) >= max_lines:
+                break
+            output.append(
+                RawRecord(
+                    text=text,
+                    language=normalized_language,
+                    source=f"indiccorp:{path.name}",
+                    source_id=f"{path.stem}:{line_index}",
+                    title="",
+                )
+            )
     return output
 
 
@@ -199,6 +225,61 @@ def deduplicate_records(records: Iterable[RawRecord]) -> List[RawRecord]:
             continue
         seen.add(key)
         output.append(record)
+    return output
+
+
+def cap_records_per_language(records: Iterable[RawRecord], max_records_per_language: int | None = None) -> List[RawRecord]:
+    """Limit each language to a fixed number of records while preserving input order."""
+    if max_records_per_language is None or max_records_per_language <= 0:
+        return list(records)
+    counts = defaultdict(int)
+    output: List[RawRecord] = []
+    for record in records:
+        language = normalize_language_code(record.language)
+        if counts[language] >= max_records_per_language:
+            continue
+        counts[language] += 1
+        output.append(record)
+    return output
+
+
+def filter_records_by_languages(records: Iterable[RawRecord], supported_languages: Sequence[str]) -> List[RawRecord]:
+    """Keep only records whose language belongs to the supported set."""
+    normalized_supported = [normalize_language_code(language) for language in supported_languages]
+    output: List[RawRecord] = []
+    for record in records:
+        language = normalize_language_code(record.language)
+        if not is_supported_language(language, normalized_supported):
+            continue
+        output.append(
+            RawRecord(
+                text=record.text,
+                language=language,
+                source=record.source,
+                source_id=record.source_id,
+                title=record.title,
+            )
+        )
+    return output
+
+
+def filter_qa_by_languages(records: Iterable[QARecord], supported_languages: Sequence[str]) -> List[QARecord]:
+    """Keep only QA entries from supported languages."""
+    normalized_supported = [normalize_language_code(language) for language in supported_languages]
+    output: List[QARecord] = []
+    for record in records:
+        language = normalize_language_code(record.language)
+        if not is_supported_language(language, normalized_supported):
+            continue
+        output.append(
+            QARecord(
+                question=record.question,
+                answer=record.answer,
+                language=language,
+                source=record.source,
+                gold_doc_id=record.gold_doc_id,
+            )
+        )
     return output
 
 

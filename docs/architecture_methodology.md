@@ -4,8 +4,8 @@
 
 ```mermaid
 flowchart TD
-    A[User Query in Any Indian Language] --> B[Language Detection]
-    B --> C[Language Token Injection <hi>/<gu>/<ta>/...]
+  A[User Query in English, Hindi, or Gujarati] --> B[Language Detection]
+  B --> C[Language Token Injection <en>/<hi>/<gu>]
     C --> D[SentencePiece Tokenization]
     D --> E[Retriever Query Encoder TF-IDF]
     E --> F[FAISS Top-k Retrieval]
@@ -46,7 +46,7 @@ flowchart TD
 
 Build a multilingual chatbot for Indian government services that:
 
-- accepts multiple Indian languages,
+- accepts English, Hindi, and Gujarati,
 - retrieves current domain documents,
 - and generates responses in the same language.
 

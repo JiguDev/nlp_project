@@ -13,9 +13,16 @@ from training.dataset import SequencePairDataset
 from training.engine import build_dataloader, build_model, get_device, load_checkpoint, train_one_epoch
 from utils.config import load_config
 from utils.io import iter_jsonl
-from utils.lang import add_language_token, detect_language, strip_language_token
+from utils.lang import add_language_token, detect_language, normalize_language_code, strip_language_token
 from utils.metrics import compute_bleu, perplexity_from_loss
 from utils.text import clean_text, join_non_empty
+
+
+LANGUAGE_PROMPT_TEMPLATES = {
+    "en": {"question": "Question", "context": "Context", "answer": "Answer"},
+    "hi": {"question": "प्रश्न", "context": "संदर्भ", "answer": "उत्तर"},
+    "gu": {"question": "પ્રશ્ન", "context": "સંદર્ભ", "answer": "જવાબ"},
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,8 +45,27 @@ def load_retriever(config: dict) -> GovernmentRetriever:
 
 def build_prompt(question: str, language: str, contexts: List[str]) -> str:
     """Construct generation prompt with retrieved evidence."""
+    labels = LANGUAGE_PROMPT_TEMPLATES.get(language, LANGUAGE_PROMPT_TEMPLATES["en"])
     context_block = join_non_empty(contexts, separator="\n")
-    return add_language_token(f"Question: {question}\nContext: {context_block}\nAnswer:", language)
+    return add_language_token(
+        f"{labels['question']}: {question}\n{labels['context']}: {context_block}\n{labels['answer']}:",
+        language,
+    )
+
+
+def select_language_contexts(results, language: str, top_k: int) -> List[str]:
+    """Prefer same-language contexts during evaluation generation."""
+    same_language = [item for item in results if normalize_language_code(item.chunk.language) == language]
+    selected = same_language[:top_k]
+    if len(selected) < top_k:
+        seen = {item.chunk.chunk_id for item in selected}
+        for item in results:
+            if item.chunk.chunk_id in seen:
+                continue
+            selected.append(item)
+            if len(selected) >= top_k:
+                break
+    return [f"{result.chunk.title}: {result.chunk.text}" for result in selected]
 
 
 def evaluate_retrieval_recall(config: dict, retriever: GovernmentRetriever, top_k: int) -> float:
@@ -94,6 +120,11 @@ def generate_predictions(
     sample_top_k = int(config.get("inference", {}).get("top_k", 50))
     beam_width = int(config.get("inference", {}).get("beam_width", 4))
     max_new_tokens = int(config.get("inference", {}).get("max_new_tokens", 80))
+    default_language = normalize_language_code(config.get("languages", {}).get("default", "en"))
+    supported_languages = {
+        normalize_language_code(language)
+        for language in config.get("languages", {}).get("supported", ["en", "hi", "gu"])
+    }
 
     for index, item in enumerate(iter_jsonl(qa_path)):
         if index >= max_examples:
@@ -102,9 +133,12 @@ def generate_predictions(
         answer = clean_text(str(item.get("answer", "")))
         if not question or not answer:
             continue
-        language = str(item.get("language", "")) or detect_language(question)
-        retrieval_results = retriever.retrieve(question, top_k=int(config.get("retrieval", {}).get("top_k", 4)))
-        contexts = [f"{result.chunk.title}: {result.chunk.text}" for result in retrieval_results]
+        language = normalize_language_code(str(item.get("language", "")) or detect_language(question, default=default_language), default=default_language)
+        if language not in supported_languages:
+            language = default_language
+        requested_top_k = int(config.get("retrieval", {}).get("top_k", 4))
+        retrieval_results = retriever.retrieve(question, top_k=max(requested_top_k * 3, requested_top_k))
+        contexts = select_language_contexts(retrieval_results, language, requested_top_k)
         prompt = build_prompt(question, language, contexts)
         src_tokens = torch.tensor([tokenizer.encode(prompt, add_bos=True, add_eos=True)], dtype=torch.long, device=device)
 

@@ -22,7 +22,7 @@ class TokenizerConfig:
     vocab_size: int = 32000
     model_type: str = "unigram"
     character_coverage: float = 0.9995
-    user_defined_symbols: Sequence[str] = ("<en>", "<hi>", "<gu>", "<ta>", "<bn>", "<mr>", "<te>", "<kn>", "<ml>", "<pa>")
+    user_defined_symbols: Sequence[str] = ("<en>", "<hi>", "<gu>")
 
 
 class SentencePieceTokenizer:

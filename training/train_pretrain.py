@@ -9,6 +9,8 @@ from torch.optim import AdamW
 
 from tokenizer.sp_tokenizer import SentencePieceTokenizer
 from training.data_pipeline import build_pretraining_pairs, build_tokenizer_corpus, load_plain_text_corpus, save_pairs_jsonl
+from utils.io import iter_jsonl
+from utils.lang import normalize_language_code
 from training.dataset import SequencePairDataset
 from training.engine import build_dataloader, build_model, get_device, save_checkpoint, train_one_epoch
 from utils.config import load_config
@@ -30,13 +32,30 @@ def ensure_artifacts(config: dict) -> tuple[Path, Path]:
     tokenizer_corpus = Path(config["paths"]["tokenizer_corpus"])
     tokenizer_model_prefix = Path(config["paths"]["tokenizer_model_prefix"])
     pretrain_pairs_path = Path(config["paths"]["pretrain_pairs"])
+    raw_corpus_path = Path(config["paths"].get("raw_corpus", processed_dir / "raw_corpus.jsonl"))
     processed_dir.mkdir(parents=True, exist_ok=True)
 
+    supported_languages = {
+        normalize_language_code(language)
+        for language in config.get("languages", {}).get("supported", ["en", "hi", "gu"])
+    }
+
     if not tokenizer_corpus.exists():
-        build_tokenizer_corpus(data_dir, tokenizer_corpus)
+        build_tokenizer_corpus(data_dir, tokenizer_corpus, supported_languages=supported_languages)
     if not pretrain_pairs_path.exists():
-        multilingual_path = data_dir / "dummy" / "multilingual_corpus.txt"
-        records = load_plain_text_corpus(multilingual_path, language="mixed") if multilingual_path.exists() else []
+        if raw_corpus_path.exists():
+            records = [
+                {
+                    "language": normalize_language_code(str(item.get("language", "en"))),
+                    "text": str(item.get("text", "")),
+                }
+                for item in iter_jsonl(raw_corpus_path)
+                if normalize_language_code(str(item.get("language", "en"))) in supported_languages
+            ]
+        else:
+            multilingual_path = data_dir / "dummy" / "multilingual_corpus.txt"
+            records = load_plain_text_corpus(multilingual_path, language="mixed") if multilingual_path.exists() else []
+            records = [record for record in records if normalize_language_code(record.get("language", "en")) in supported_languages]
         pairs = build_pretraining_pairs(records)
         save_pairs_jsonl(pretrain_pairs_path, pairs)
     if not Path(f"{tokenizer_model_prefix}.model").exists():
