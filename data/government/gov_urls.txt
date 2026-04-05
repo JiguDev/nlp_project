@@ -3,3 +3,10 @@
 # https://www.india.gov.in/
 # https://www.mygov.in/
 # https://egazette.gov.in/
+
+https://www.india.gov.in/
+https://www.mygov.in/
+https://services.india.gov.in/
+https://egazette.gov.in/
+https://uidai.gov.in/
+https://www.digitalindia.gov.in/

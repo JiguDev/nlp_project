@@ -51,12 +51,16 @@ def build_dataloader(dataset: SequencePairDataset, batch_size: int, shuffle: boo
 
 
 def get_device(requested_device: str = "auto") -> torch.device:
-    """Select CPU or GPU based on availability and user preference."""
     if requested_device == "cpu":
+        print("Using CPU")
         return torch.device("cpu")
-    if requested_device == "cuda":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if torch.cuda.is_available():
+        print("✅ CUDA available → Using GPU")
+        return torch.device("cuda")
+
+    print("⚠️ CUDA not available → Using CPU")
+    return torch.device("cpu")
 
 
 def sequence_loss(logits: torch.Tensor, target_tokens: torch.Tensor, pad_id: int, label_smoothing: float = 0.0) -> torch.Tensor:
