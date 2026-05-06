@@ -111,3 +111,25 @@ def detect_language_with_confidence(text: str, default: str = "en") -> tuple[str
     if language not in SUPPORTED_LANGUAGE_TOKENS:
         language = normalized_default
     return language, float(best.prob)
+
+
+def detect_target_language_override(query: str, detected_language: str) -> str:
+    """
+    Scan the query for explicit instructions to answer in a specific language.
+    E.g. 'in english', 'मुझे अंग्रेजी में बताइए', 'ગુજરાતી માં'.
+    """
+    query_lower = query.lower()
+
+    # English overrides
+    if any(kw in query_lower for kw in ["in english", "english language", "अंग्रेजी में", "angreji me"]):
+        return "en"
+    
+    # Hindi overrides
+    if any(kw in query_lower for kw in ["in hindi", "hindi language", "हिंदी में", "hindi me", "hindi mein"]):
+        return "hi"
+    
+    # Gujarati overrides
+    if any(kw in query_lower for kw in ["in gujarati", "gujarati language", "ગુજરાતી માં", "gujrati ma"]):
+        return "gu"
+
+    return detected_language

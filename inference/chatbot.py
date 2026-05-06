@@ -8,8 +8,9 @@ from typing import List
 from retrieval.retriever import GovernmentRetriever, resolve_retrieval_documents
 from utils.io import iter_jsonl
 from utils.config import load_config
-from utils.lang import detect_language, normalize_language_code
+from utils.lang import detect_language, normalize_language_code, detect_target_language_override
 from inference.generator import ChatbotGenerator
+from retrieval.web_search import WebRetriever
 
 
 # =========================
@@ -84,6 +85,7 @@ def main() -> None:
 
     retriever = load_retriever(config)
     generator = ChatbotGenerator(config)
+    web_retriever = WebRetriever()
 
     top_k = int(config["retrieval"]["top_k"])
 
@@ -113,14 +115,21 @@ def main() -> None:
 
         if language not in supported_languages:
             language = default_lang
+            
+        target_language = detect_target_language_override(user_text, language)
 
-        # 🔥 RETRIEVAL (more candidates = better filtering)
+        # 🔥 RETRIEVAL (Local FAISS)
         results = retriever.retrieve(user_text, top_k=top_k * 5)
+        local_contexts = _select_language_matched_contexts(results, language, top_k)
+        
+        # 🔥 LIVE WEB SCRAPING
+        web_contexts = web_retriever.search_government_web(user_text, top_k=2)
 
-        contexts = _select_language_matched_contexts(results, language, top_k)
+        # Combine
+        combined_contexts = local_contexts + web_contexts
 
-        # 🔥 SAFE RESPONSE
-        response = generator.generate(language, user_text, contexts)
+        # 🔥 GENERATION
+        response = generator.generate(target_language, user_text, combined_contexts)
 
         print(f"Bot: {response}\n")
 

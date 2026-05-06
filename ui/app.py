@@ -8,11 +8,12 @@ sys.path.insert(0, str(ROOT_DIR))
 os.chdir(ROOT_DIR)
 
 import streamlit as st
-from utils.lang import detect_language, normalize_language_code
+from utils.lang import detect_language, normalize_language_code, detect_target_language_override
 from utils.config import load_config
 from retrieval.retriever import GovernmentRetriever
 from inference.chatbot import _select_language_matched_contexts, load_retriever
 from inference.generator import ChatbotGenerator
+from retrieval.web_search import WebRetriever
 
 
 # =========================
@@ -22,10 +23,11 @@ def init_system():
     config = load_config("configs/default.yaml")
     retriever = load_retriever(config)
     generator = ChatbotGenerator(config)
-    return config, retriever, generator
+    web_retriever = WebRetriever()
+    return config, retriever, generator, web_retriever
 
 
-config, retriever, generator = init_system()
+config, retriever, generator, web_retriever = init_system()
 
 top_k = int(config["retrieval"]["top_k"])
 
@@ -76,13 +78,21 @@ if user_input:
 
     if language not in supported_languages:
         language = default_lang
+        
+    target_language = detect_target_language_override(user_input, language)
 
     # Retrieval
     results = retriever.retrieve(user_input, top_k=top_k * 5)
-    contexts = _select_language_matched_contexts(results, language, top_k)
+    local_contexts = _select_language_matched_contexts(results, language, top_k)
+    
+    # Web Scraping
+    web_contexts = web_retriever.search_government_web(user_input, top_k=2)
+    
+    # Combine
+    combined_contexts = local_contexts + web_contexts
 
     # Response
-    response = generator.generate(language, user_input, contexts)
+    response = generator.generate(target_language, user_input, combined_contexts)
 
     # Show bot response
     with st.chat_message("assistant"):
