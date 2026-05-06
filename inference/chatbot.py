@@ -9,6 +9,7 @@ from retrieval.retriever import GovernmentRetriever, resolve_retrieval_documents
 from utils.io import iter_jsonl
 from utils.config import load_config
 from utils.lang import detect_language, normalize_language_code
+from inference.generator import ChatbotGenerator
 
 
 # =========================
@@ -18,33 +19,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-# =========================
-def _retrieval_fallback_response(language: str, question: str, chunks: List[str]) -> str:
-    """Clean response using retrieved context with hallucination control."""
 
-    context = chunks[0] if chunks else ""
-
-    # 🔥 RELEVANCE FILTER (avoid weak / noisy chunks)
-    if context and len(context.split()) < 8:
-        context = ""
-
-    # 🔥 DON'T BLUFF LOGIC
-    if not context:
-        if language == "hi":
-            return "माफ़ कीजिए, इस प्रश्न के लिए पर्याप्त सरकारी जानकारी उपलब्ध नहीं है।"
-        elif language == "gu":
-            return "માફ કરશો, આ પ્રશ્ન માટે પૂરતી માહિતી ઉપલબ્ધ નથી."
-        else:
-            return "Sorry, I don't have reliable government information for this question."
-
-    # ✅ VALID RESPONSE
-    if language == "hi":
-        return f"उपलब्ध जानकारी के अनुसार: {context}"
-
-    if language == "gu":
-        return f"મળેલી માહિતી અનુસાર: {context}"
-
-    return f"Based on available information: {context}"
 
 
 # =========================
@@ -108,6 +83,7 @@ def main() -> None:
     print("==============================\n")
 
     retriever = load_retriever(config)
+    generator = ChatbotGenerator(config)
 
     top_k = int(config["retrieval"]["top_k"])
 
@@ -144,7 +120,7 @@ def main() -> None:
         contexts = _select_language_matched_contexts(results, language, top_k)
 
         # 🔥 SAFE RESPONSE
-        response = _retrieval_fallback_response(language, user_text, contexts)
+        response = generator.generate(language, user_text, contexts)
 
         print(f"Bot: {response}\n")
 

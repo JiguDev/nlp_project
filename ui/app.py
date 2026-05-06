@@ -11,7 +11,8 @@ import streamlit as st
 from utils.lang import detect_language, normalize_language_code
 from utils.config import load_config
 from retrieval.retriever import GovernmentRetriever
-from inference.chatbot import _retrieval_fallback_response, _select_language_matched_contexts, load_retriever
+from inference.chatbot import _select_language_matched_contexts, load_retriever
+from inference.generator import ChatbotGenerator
 
 
 # =========================
@@ -20,10 +21,11 @@ from inference.chatbot import _retrieval_fallback_response, _select_language_mat
 def init_system():
     config = load_config("configs/default.yaml")
     retriever = load_retriever(config)
-    return config, retriever
+    generator = ChatbotGenerator(config)
+    return config, retriever, generator
 
 
-config, retriever = init_system()
+config, retriever, generator = init_system()
 
 top_k = int(config["retrieval"]["top_k"])
 
@@ -80,7 +82,7 @@ if user_input:
     contexts = _select_language_matched_contexts(results, language, top_k)
 
     # Response
-    response = _retrieval_fallback_response(language, user_input, contexts)
+    response = generator.generate(language, user_input, contexts)
 
     # Show bot response
     with st.chat_message("assistant"):
