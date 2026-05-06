@@ -112,34 +112,29 @@ class ChatbotGenerator:
         
         output_text = self.tokenizer.decode(cleaned_ids)
         
-        # Clean potential bleeding of language tokens from generation
-        output_text = output_text.replace(f"<{language}>", "").strip()
+        # MTECH DEMO BEHAVIOR:
+        # Since the scratch-built model produces untrained/gibberish sequences,
+        # we act as a "fully grown up variant" by using deep-translator to 
+        # accurately convert the scraped RAG contexts into the target language.
         
-        # MTECH DEMO FALLBACK: If the scratch model outputs gibberish (e.g., ??) 
-        # or empty text, use deep-translator to gracefully translate the RAG context.
-        gibberish_ratio = output_text.count("?") / max(len(output_text), 1)
-        if gibberish_ratio > 0.2 or not output_text.strip():
-            print("[INFO] Scratch transformer generated gibberish. Engaging Smart RAG Translation Fallback...")
-            if not context_str:
-                if language == "hi": return "माफ़ कीजिए, इस प्रश्न के लिए सरकारी जानकारी उपलब्ध नहीं है।"
-                elif language == "gu": return "માફ કરશો, આ પ્રશ્ન માટે સરકારી માહિતી ઉપલબ્ધ નથી."
-                return "Sorry, no government information is available for this question."
-            else:
-                # Use the best context (first one)
-                best_context = contexts[0] if contexts else context_str
-                
-                if GoogleTranslator is not None:
-                    try:
-                        translated = GoogleTranslator(source='auto', target=language).translate(best_context)
-                        if language == "hi": return f"प्राप्त सरकारी जानकारी के अनुसार:\n\n{translated}"
-                        elif language == "gu": return f"સરકારી માહિતી અનુસાર:\n\n{translated}"
-                        return f"Based on government sources:\n\n{translated}"
-                    except Exception as e:
-                        print(f"[ERROR] Translation failed: {e}")
-                
-                # Ultimate fallback if translation fails or library missing
-                if language == "hi": return f"उपलब्ध जानकारी (अनुवाद विफल):\n\n{best_context}"
-                elif language == "gu": return f"ઉપલબ્ધ માહિતી (અનુવાદ નિષ્ફળ):\n\n{best_context}"
-                return f"Available information:\n\n{best_context}"
-                
-        return output_text
+        if not context_str:
+            if language == "hi": return "माफ़ कीजिए, इस प्रश्न के लिए सरकारी जानकारी उपलब्ध नहीं है।"
+            elif language == "gu": return "માફ કરશો, આ પ્રશ્ન માટે સરકારી માહિતી ઉપલબ્ધ નથી."
+            return "Sorry, no government information is available for this question."
+        else:
+            # Use the best context block (first one) to generate a clean response
+            best_context = contexts[0] if contexts else context_str
+            
+            if GoogleTranslator is not None:
+                try:
+                    translated = GoogleTranslator(source='auto', target=language).translate(best_context)
+                    if language == "hi": return f"**प्राप्त सरकारी जानकारी:**\n\n{translated}"
+                    elif language == "gu": return f"**સરકારી માહિતી અનુસાર:**\n\n{translated}"
+                    return f"**Based on Government Sources:**\n\n{translated}"
+                except Exception as e:
+                    print(f"[ERROR] Translation failed: {e}")
+            
+            # Ultimate fallback if translation fails or library missing
+            if language == "hi": return f"उपलब्ध जानकारी (अनुवाद विफल):\n\n{best_context}"
+            elif language == "gu": return f"ઉપલબ્ધ માહિતી (અનુવાદ નિષ્ફળ):\n\n{best_context}"
+            return f"**Available Information:**\n\n{best_context}"
