@@ -30,12 +30,12 @@ class ChatbotGenerator:
         # Load Fine-tuned Checkpoint
         checkpoint_path = Path(config["paths"]["finetune_checkpoint"])
         if not checkpoint_path.exists():
-            print(f"⚠️ Fine-tuned checkpoint not found at {checkpoint_path}. Attempting to use pretrain checkpoint.")
+            print(f"[WARN] Fine-tuned checkpoint not found at {checkpoint_path}. Attempting to use pretrain checkpoint.")
             checkpoint_path = Path(config["paths"]["pretrain_checkpoint"])
             if not checkpoint_path.exists():
                 raise FileNotFoundError("Neither finetune nor pretrain checkpoints found. Please train the model first.")
         
-        print(f"📦 Loading generation model: {checkpoint_path}")
+        print(f"[INFO] Loading generation model: {checkpoint_path}")
         load_checkpoint(checkpoint_path, self.model, map_location=self.device)
         self.model.eval()
 
@@ -89,7 +89,7 @@ class ChatbotGenerator:
                         max_new_tokens=max_new_tokens
                     )
         except Exception as e:
-            print(f"⚠️ Error during generation: {e}")
+            print(f"[ERROR] Error during generation: {e}")
             if language == "hi":
                 return "माफ़ कीजिए, मैं अभी उत्तर उत्पन्न करने में असमर्थ हूँ।"
             elif language == "gu":

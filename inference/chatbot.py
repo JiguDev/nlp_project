@@ -51,10 +51,10 @@ def load_retriever(config: dict) -> GovernmentRetriever:
     vectorizer_path = index_path.with_suffix(".pkl")
 
     if index_path.exists() and meta_path.exists() and vectorizer_path.exists():
-        print("✅ Loading existing FAISS index...")
+        print("[OK] Loading existing FAISS index...")
         return GovernmentRetriever.load(index_path, meta_path, vectorizer_path=vectorizer_path)
 
-    print("⚠️ Building retriever from documents...")
+    print("[WARN] Building retriever from documents...")
 
     documents = resolve_retrieval_documents(config)
 
@@ -79,7 +79,7 @@ def main() -> None:
     config = load_config(args.config)
 
     print("\n==============================")
-    print("🚀 Starting Chatbot")
+    print("Starting Chatbot")
     print("==============================\n")
 
     retriever = load_retriever(config)
@@ -94,7 +94,7 @@ def main() -> None:
 
     default_lang = normalize_language_code(config["languages"]["default"])
 
-    print("💬 Chatbot ready (en / hi / gu). Type 'exit' to quit.\n")
+    print("Chatbot ready (en / hi / gu). Type 'exit' to quit.\n")
 
     # =========================
     while True:
