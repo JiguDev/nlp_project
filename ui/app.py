@@ -49,28 +49,45 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-# Custom CSS for Premium Look
+# Custom CSS for Theme-Adaptive Premium Look
 st.markdown("""
     <style>
+    /* Main App Background */
     .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        color: #f8fafc;
+        background: transparent;
     }
-    .stChatMessage {
+    
+    /* Message styling - Adaptive */
+    [data-testid="stChatMessage"] {
         border-radius: 15px;
         margin-bottom: 1rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        background-color: rgba(128, 128, 128, 0.05);
     }
-    [data-testid="stChatMessageContent"] {
-        font-family: 'Inter', sans-serif;
+    
+    /* Custom Status Pill - Adaptive */
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 18px;
+        background: rgba(128, 128, 128, 0.1);
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        border-radius: 50px;
+        font-size: 0.85rem;
+        margin-bottom: 15px;
+        backdrop-filter: blur(8px);
+        animation: fadeInOut 2s infinite ease-in-out;
     }
+
+    /* Input box styling */
     .stChatInputContainer {
         border-radius: 20px;
     }
-    .stStatusWidget {
-        background-color: rgba(255, 255, 255, 0.05);
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+
+    @keyframes fadeInOut {
+        0% { opacity: 0.6; }
+        50% { opacity: 1; }
+        100% { opacity: 0.6; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -102,38 +119,52 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    with st.status("Thinking...", expanded=True) as status:
-        st.write("🔍 Detecting language...")
-        # Detect language
-        language = normalize_language_code(
-            detect_language(user_input, default=default_lang),
-            default=default_lang,
-        )
+    # Status Placeholder for Pill UI
+    status_placeholder = st.empty()
+    
+    def update_status(text):
+        status_placeholder.markdown(f"""
+            <div class="status-pill">
+                {text}
+            </div>
+            """, unsafe_allow_html=True)
 
-        if language not in supported_languages:
-            language = default_lang
-            
-        target_language = detect_target_language_override(user_input, language)
+    update_status("Thinking...")
+    time.sleep(0.5)
 
-        st.write("🌐 Searching the web for live information...")
-        # Web Scraping  (this is the PRIMARY source now)
-        web_contexts = web_retriever.search_all(user_input, top_k=3)
+    # 🔍 Detecting language...
+    update_status("🔍 Detecting language...")
+    language = normalize_language_code(
+        detect_language(user_input, default=default_lang),
+        default=default_lang,
+    )
 
-        # Use web contexts as the sole source of truth
-        # Only fall back to local DB if web returns nothing
-        if web_contexts:
-            combined_contexts = web_contexts
-        else:
-            st.write("📚 Web search returned no results. Checking local database...")
-            results = retriever.retrieve(user_input, top_k=top_k * 5)
-            local_contexts = _select_language_matched_contexts(results, language, top_k)
-            combined_contexts = local_contexts
-
-        st.write("🧠 Synthesizing response...")
-        # Response
-        response = generator.generate(target_language, user_input, combined_contexts)
+    if language not in supported_languages:
+        language = default_lang
         
-        status.update(label="Complete!", state="complete", expanded=False)
+    target_language = detect_target_language_override(user_input, language)
+
+    # 🌐 Searching the web for live information...
+    update_status("🌐 Searching the web for live information...")
+    web_contexts = web_retriever.search_all(user_input, top_k=3)
+
+    # Combine (Prioritize Web Data)
+    if web_contexts:
+        combined_contexts = web_contexts
+    else:
+        # 📚 Web search returned no results. Checking local database...
+        update_status("📚 Web search returned no results. Checking local database...")
+        time.sleep(1) # Brief pause for readability
+        results = retriever.retrieve(user_input, top_k=top_k * 5)
+        local_contexts = _select_language_matched_contexts(results, language, top_k)
+        combined_contexts = local_contexts
+
+    # 🧠 Synthesizing response...
+    update_status("🧠 Synthesizing response...")
+    response = generator.generate(target_language, user_input, combined_contexts)
+    
+    # Clear status pill once complete
+    status_placeholder.empty()
 
     # Show bot response
     with st.chat_message("assistant"):
