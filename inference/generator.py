@@ -119,10 +119,16 @@ class ChatbotGenerator:
         
         if not contexts:
             if language == "hi": 
-                return f"**🛑 माफ़ कीजिए**\nइस प्रश्न के लिए कोई आधिकारिक सरकारी जानकारी उपलब्ध नहीं है।"
+                msg = "🛑 माफ़ कीजिए, इस प्रश्न के लिए कोई आधिकारिक सरकारी जानकारी उपलब्ध नहीं है।"
             elif language == "gu": 
-                return f"**🛑 માફ કરશો**\nઆ પ્રશ્ન માટે કોઈ સત્તાવાર સરકારી માહિતી ઉપલબ્ધ નથી।"
-            return f"**🛑 Sorry**\nNo official government information was found for this query."
+                msg = "🛑 માફ કરશો, આ પ્રશ્ન માટે કોઈ સત્તાવાર સરકારી માહિતી ઉપલબ્ધ નથી।"
+            else:
+                msg = "🛑 Sorry, no official government information was found for this query."
+            
+            return {
+                "summary": msg,
+                "details": ""
+            }
         else:
             # Aggregate multiple contexts for a more "explainative" response
             combined_context = "\n\n".join(contexts[:3])
@@ -146,13 +152,17 @@ class ChatbotGenerator:
                     # Generate a simple "summary" by taking the first sentence of translation
                     summary_sent = translated.split(".")[0] + "." if "." in translated else translated[:100] + "..."
                     
-                    return f"{summary_label} {summary_sent}\n\n{details_label}\n{translated}"
+                    return {
+                        "summary": summary_sent,
+                        "details": translated
+                    }
 
                 except Exception as e:
                     print(f"[ERROR] Translation failed: {e}")
             
             # Ultimate fallback if translation fails or library missing
-            if language == "hi": return f"**⚠️ उपलब्ध जानकारी:**\n\n{combined_context}"
-            elif language == "gu": return f"**⚠️ ઉપલબ્ધ માહિતી:**\n\n{combined_context}"
-            return f"**⚠️ Available Information:**\n\n{combined_context}"
+            return {
+                "summary": combined_context[:100] + "...",
+                "details": combined_context
+            }
 

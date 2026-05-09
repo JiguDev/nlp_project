@@ -57,12 +57,20 @@ st.markdown("""
         background: transparent;
     }
     
+    /* Center the chat and add overall margins */
+    .main .block-container {
+        max-width: 900px;
+        padding-right: 3rem;
+        padding-left: 3rem;
+    }
+
     /* Message styling - Adaptive */
     [data-testid="stChatMessage"] {
         border-radius: 15px;
         margin-bottom: 1rem;
         border: 1px solid rgba(128, 128, 128, 0.2);
         background-color: rgba(128, 128, 128, 0.05);
+        margin-right: 8%; /* Balanced right margin */
     }
     
     /* Custom Status Pill - Adaptive */
@@ -77,6 +85,19 @@ st.markdown("""
         margin-bottom: 15px;
         backdrop-filter: blur(8px);
         animation: fadeInOut 2s infinite ease-in-out;
+    }
+
+    /* Target st.info (Summary box) to add more right margin and spacing */
+    [data-testid="stAlert"], [data-testid="stNotification"] {
+        margin-right: 8% !important;
+        margin-bottom: 20px !important;
+        border-radius: 12px !important;
+    }
+
+    /* Paragraph styling for better readability and alignment */
+    [data-testid="stChatMessage"] p {
+        line-height: 1.6;
+        padding-right: 8%; /* Align with the Summary box margin */
     }
 
     /* Input box styling */
@@ -101,10 +122,19 @@ if "messages" not in st.session_state:
 
 
 # =========================
-# Display chat history
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+# Chat Display Container
+chat_container = st.container()
+
+# Display chat history from state
+with chat_container:
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            if isinstance(msg["content"], dict):
+                st.info(f"**📌 Summary:**\n\n{msg['content']['summary']}")
+                if msg["content"]["details"]:
+                    st.markdown(f"**🔍 Details:**\n\n{msg['content']['details']}")
+            else:
+                st.markdown(msg["content"])
 
 
 # =========================
@@ -112,13 +142,13 @@ for msg in st.session_state.messages:
 user_input = st.chat_input("Ask your question...")
 
 if user_input:
-
-    # Show user message
+    # 1. Immediately show user message in the UI and state
     st.session_state.messages.append({"role": "user", "content": user_input})
+    with chat_container:
+        with st.chat_message("user"):
+            st.markdown(user_input)
 
-    with st.chat_message("user"):
-        st.markdown(user_input)
-
+    # 2. Process response
     # Status Placeholder for Pill UI
     status_placeholder = st.empty()
     
@@ -130,54 +160,48 @@ if user_input:
             """, unsafe_allow_html=True)
 
     update_status("Thinking...")
-    time.sleep(0.5)
-
-    # 🔍 Detecting language...
-    update_status("🔍 Detecting language...")
+    
+    # Logic remains same...
     language = normalize_language_code(
         detect_language(user_input, default=default_lang),
         default=default_lang,
     )
-
     if language not in supported_languages:
         language = default_lang
-        
     target_language = detect_target_language_override(user_input, language)
 
-    # 🌐 Searching the web for live information...
     update_status("🌐 Searching the web for live information...")
     web_contexts = web_retriever.search_all(user_input, top_k=3)
 
-    # Combine (Prioritize Web Data)
     if web_contexts:
         combined_contexts = web_contexts
     else:
-        # 📚 Web search returned no results. Checking local database...
         update_status("📚 Web search returned no results. Checking local database...")
-        time.sleep(1) # Brief pause for readability
+        time.sleep(1)
         results = retriever.retrieve(user_input, top_k=top_k * 5)
         local_contexts = _select_language_matched_contexts(results, language, top_k)
         combined_contexts = local_contexts
 
-    # 🧠 Synthesizing response...
     update_status("🧠 Synthesizing response...")
     response = generator.generate(target_language, user_input, combined_contexts)
-    
-    # Clear status pill once complete
     status_placeholder.empty()
 
-    # Show bot response
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
+    # 3. Show assistant response with streaming effect
+    with chat_container:
+        with st.chat_message("assistant"):
+            summary_placeholder = st.empty()
+            details_placeholder = st.empty()
 
-        full_response = ""
-        words = response.split()
+            summary_placeholder.info(f"**📌 Summary:**\n\n{response['summary']}")
+            
+            if response["details"]:
+                full_details = ""
+                words = response["details"].split()
+                for word in words:
+                    full_details += word + " "
+                    details_placeholder.markdown(f"**🔍 Details:**\n\n{full_details}▌")
+                    time.sleep(0.04)
+                details_placeholder.markdown(f"**🔍 Details:**\n\n{full_details}")
 
-        for word in words:
-            full_response += word + " "
-            message_placeholder.markdown(full_response + "▌")
-            time.sleep(0.04)  # speed control
-
-        message_placeholder.markdown(full_response)
-
+    # 4. Save to history
     st.session_state.messages.append({"role": "assistant", "content": response})
