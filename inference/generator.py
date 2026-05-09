@@ -118,9 +118,9 @@ class ChatbotGenerator:
         # accurately convert the scraped RAG contexts into the target language.
         
         if not context_str:
-            if language == "hi": return "माफ़ कीजिए, इस प्रश्न के लिए सरकारी जानकारी उपलब्ध नहीं है।"
-            elif language == "gu": return "માફ કરશો, આ પ્રશ્ન માટે સરકારી માહિતી ઉપલબ્ધ નથી."
-            return "Sorry, no government information is available for this question."
+            if language == "hi": return f"**[Native Model Output]**\n{output_text}\n\n**[Hybrid API Fallback]**\nमाफ़ कीजिए, इस प्रश्न के लिए सरकारी जानकारी उपलब्ध नहीं है।"
+            elif language == "gu": return f"**[Native Model Output]**\n{output_text}\n\n**[Hybrid API Fallback]**\nમાફ કરશો, આ પ્રશ્ન માટે સરકારી માહિતી ઉપલબ્ધ નથી."
+            return f"**[Native Model Output]**\n{output_text}\n\n**[Hybrid API Fallback]**\nSorry, no government information is available for this question."
         else:
             # Use the best context block (first one) to generate a clean response
             best_context = contexts[0] if contexts else context_str
@@ -128,13 +128,13 @@ class ChatbotGenerator:
             if GoogleTranslator is not None:
                 try:
                     translated = GoogleTranslator(source='auto', target=language).translate(best_context)
-                    if language == "hi": return f"**प्राप्त सरकारी जानकारी:**\n\n{translated}"
-                    elif language == "gu": return f"**સરકારી માહિતી અનુસાર:**\n\n{translated}"
-                    return f"**Based on Government Sources:**\n\n{translated}"
+                    if language == "hi": return f"**[Native Model Output]**\n{output_text}\n\n---\n\n**[Hybrid API Fallback] प्राप्त सरकारी जानकारी:**\n\n{translated}"
+                    elif language == "gu": return f"**[Native Model Output]**\n{output_text}\n\n---\n\n**[Hybrid API Fallback] સરકારી માહિતી અનુસાર:**\n\n{translated}"
+                    return f"**[Native Model Output]**\n{output_text}\n\n---\n\n**[Hybrid API Fallback] Based on Government Sources:**\n\n{translated}"
                 except Exception as e:
                     print(f"[ERROR] Translation failed: {e}")
             
             # Ultimate fallback if translation fails or library missing
-            if language == "hi": return f"उपलब्ध जानकारी (अनुवाद विफल):\n\n{best_context}"
-            elif language == "gu": return f"ઉપલબ્ધ માહિતી (અનુવાદ નિષ્ફળ):\n\n{best_context}"
-            return f"**Available Information:**\n\n{best_context}"
+            if language == "hi": return f"**[Native Model Output]**\n{output_text}\n\n---\n**[Hybrid API Fallback] उपलब्ध जानकारी (अनुवाद विफल):**\n\n{best_context}"
+            elif language == "gu": return f"**[Native Model Output]**\n{output_text}\n\n---\n**[Hybrid API Fallback] ઉપલબ્ધ માહિતી (અનુવાદ નિષ્ફળ):**\n\n{best_context}"
+            return f"**[Native Model Output]**\n{output_text}\n\n---\n**[Hybrid API Fallback] Available Information:**\n\n{best_context}"

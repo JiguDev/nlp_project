@@ -1,7 +1,7 @@
 seed: 42
 
 tokenizer:
-  vocab_size: 8000
+  vocab_size: 32000
   model_type: "unigram"
 
 paths:
@@ -26,17 +26,17 @@ languages:
   default: "en"
 
 model:
-  d_model: 256
+  d_model: 512
   num_heads: 8
-  num_encoder_layers: 4
-  num_decoder_layers: 4
-  dim_feedforward: 512
+  num_encoder_layers: 6
+  num_decoder_layers: 6
+  dim_feedforward: 2048
   dropout: 0.1
   max_len: 256
   tie_embeddings: true
 
 training:
-  batch_size: 8
+  batch_size: 4
   pretrain_epochs: 5
   finetune_epochs: 10
   learning_rate: 0.0001
