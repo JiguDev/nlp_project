@@ -113,57 +113,86 @@ class WebRetriever:
     # ------------------------------------------------------------------ #
     def search_all(self, query: str, top_k: int = 3) -> List[str]:
         """
-        Try multiple sources in order of reliability:
-          1. Wikipedia API  (best quality)
-          2. DDG HTML scrape for gov.in
-          3. DDG HTML scrape (general)
-        Returns the first batch that succeeds.
+        Aggressive retrieval strategy:
+        1. Clean and identify language.
+        2. Always search English sources (Wikipedia/Gov.in) for Indian schemes.
+        3. Fallback to native language Wikipedia only if English fails.
         """
+        original_q = query.strip()
         clean_q = self._clean_query(query)
-        print(f"[WebRetriever] Searching for: '{clean_q}'")
+        
+        # Identify script
+        is_indic = any('\u0900' <= c <= '\u097F' for c in clean_q) or any('\u0A80' <= c <= '\u0AFF' for c in clean_q)
+        
+        search_queries = [clean_q]
+        if is_indic:
+            try:
+                from deep_translator import GoogleTranslator
+                translated_q = GoogleTranslator(source='auto', target='en').translate(clean_q)
+                print(f"[WebRetriever] Indic script detected. Searching English fallback: '{translated_q}'")
+                search_queries.insert(0, translated_q) # Prioritize English search
+            except Exception:
+                pass
 
-        # --- Wikipedia (most reliable) ---
-        wiki = self.search_wikipedia(clean_q, sentences=6)
-        if wiki:
-            print(f"[WebRetriever] Wikipedia returned {len(wiki)} result(s)")
-            return wiki[:top_k]
+        results = []
+        for q in search_queries:
+            print(f"[WebRetriever] Querying: '{q}'")
+            # 1. Wikipedia English (High quality)
+            wiki_en = self.search_wikipedia(q, sentences=6, lang="en")
+            if wiki_en:
+                results.extend(wiki_en)
+            
+            # 2. Gov.in Targeted Scrape
+            gov = self._scrape_search_snippets(f"{q} site:gov.in", top_k=top_k)
+            if gov:
+                results.extend(gov)
+            
+            if results:
+                break # Found high quality data
 
-        # --- Gov.in scrape ---
-        gov = self._scrape_search_snippets(f"{clean_q} site:gov.in", top_k=top_k)
-        if gov:
-            print(f"[WebRetriever] Gov.in scrape returned {len(gov)} result(s)")
-            return gov
+        # 3. Last resort: Native Wikipedia
+        if not results and is_indic:
+            lang = "hi" if any('\u0900' <= c <= '\u097F' for c in clean_q) else "gu"
+            native = self.search_wikipedia(clean_q, sentences=6, lang=lang)
+            results.extend(native)
 
-        # --- General web scrape ---
-        general = self._scrape_search_snippets(clean_q, top_k=top_k)
-        if general:
-            print(f"[WebRetriever] General scrape returned {len(general)} result(s)")
-            return general
-
-        print("[WebRetriever] All sources returned 0 results")
-        return []
+        if not results:
+            print("[WebRetriever] All sources returned 0 results")
+            return []
+        
+        return results[:top_k]
 
     # ------------------------------------------------------------------ #
     # helpers
     # ------------------------------------------------------------------ #
     @staticmethod
     def _clean_query(query: str) -> str:
-        """Remove language-override phrases so the search focuses on the topic."""
+        """Remove language-override phrases and normalize."""
         q = query.lower()
-        stopwords = [
-            "in english", "english language", "अंग्रेजी में", "angreji me",
-            "in hindi", "hindi language", "हिंदी में", "hindi me", "hindi mein",
-            "in gujarati", "gujarati language", "ગુજરાતી માં", "gujrati ma",
-            "tell me about same in detail", "tell me about", "tell me in detail",
-            "tell me", "reply me in hindi", "reply me in gujarati", "reply me in english",
-            "reply me in", "reply in", "reply me",
-            "what is the", "what is a", "what is",
-            "explain about", "explain",
-            "in detail", "same in detail",
-            "मुझे", "बताइए", "बताओ",
+        # Remove noisy suffixes/prefixes
+        noise = [
+            "in hindi", "in gujarati", "in english", "tell me about", "reply me", 
+            "हिंदी में", "ગુજરાતી માં", "explain", "what is", "about", "details of"
         ]
-        for w in stopwords:
-            q = q.replace(w, "")
+        for n in noise:
+            q = q.replace(n, "")
+        
+        q = re.sub(r"\s+", " ", q).strip()
+        
+        # Specific Indian Gov keyword boosting
+        corrections = {
+            "nps": "National Pension System India",
+            "mgnrega": "MGNREGA Scheme India",
+            "aadhar": "Aadhaar Card UIDAI",
+            "pan": "Income Tax PAN Card India",
+            "rti": "Right to Information Act India",
+            "pm kisan": "PM-Kisan Scheme India",
+        }
+        for k, v in corrections.items():
+            if k in q:
+                return v # Return the boosted query immediately
+                
+        return q if len(q) > 2 else query
         q = re.sub(r"\s+", " ", q).strip()
         # Remove dangling punctuation
         q = re.sub(r"^[,.\s]+|[,.\s]+$", "", q)

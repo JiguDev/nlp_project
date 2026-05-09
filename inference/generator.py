@@ -117,7 +117,60 @@ class ChatbotGenerator:
         # we act as a "fully grown up variant" by using deep-translator to 
         # accurately convert the scraped RAG contexts into the target language.
         
-        if not contexts:
+        # RELEVANCE & DEDUPLICATION:
+        # 1. Deduplicate contexts (case insensitive)
+        unique_contexts = []
+        seen_texts = set()
+        for c in contexts:
+            c_low = c.lower().strip()
+            if c_low not in seen_texts:
+                unique_contexts.append(c)
+                seen_texts.add(c_low)
+        
+        # 2. Strict Topic Match & Government Relevance Gate
+        query_keywords = [w.lower() for w in question.split() if len(w) > 2]
+        
+        # Cross-lingual Keyword Support: Translate Hindi/Gujarati keywords to English for matching
+        is_indic = any('\u0900' <= c <= '\u097F' for c in question) or any('\u0A80' <= c <= '\u0AFF' for c in question)
+        if is_indic:
+            try:
+                en_keywords = GoogleTranslator(source='auto', target='en').translate(question).lower().split()
+                query_keywords.extend([w for w in en_keywords if len(w) > 2])
+            except: pass
+
+        gov_keywords = [
+            "government", "india", "scheme", "ministry", "act", "law", "pension", 
+            "card", "service", "bharat", "yojana", "official", "national", "state",
+            "भारत", "सरकार", "योजना", "सेवा", "ભારત", "સરકાર", "યોજના", "સેવા"
+        ]
+        
+        filtered_contexts = []
+        for c in unique_contexts:
+            c_low = c.lower()
+            
+            # A: Must have some word overlap with query (now includes translated keywords)
+            has_query_match = any(k in c_low for k in query_keywords)
+            
+            # B: Must look like government/official information
+            is_gov_related = any(gk in c_low for gk in gov_keywords)
+            
+            # Special case for 'Digital India' dummy data (strict check)
+            if "digital india" in c_low and not any(k in "digital india" for k in query_keywords):
+                if not has_query_match: continue
+
+            # Reject if it doesn't look official or related to query
+            # (Relaxed slightly to ensure valid gov results pass)
+            if not (has_query_match and is_gov_related):
+                # If it's a very strong gov match (like a wiki page with 'India' and 'Ministry'), 
+                # let it pass even if keyword matching is weak due to translation issues
+                if is_gov_related and ("india" in c_low or "ministry" in c_low or "pension" in c_low):
+                    pass
+                else:
+                    continue
+                
+            filtered_contexts.append(c)
+
+        if not filtered_contexts:
             if language == "hi": 
                 msg = "🛑 माफ़ कीजिए, इस प्रश्न के लिए कोई आधिकारिक सरकारी जानकारी उपलब्ध नहीं है।"
             elif language == "gu": 
@@ -131,7 +184,7 @@ class ChatbotGenerator:
             }
         else:
             # Aggregate multiple contexts for a more "explainative" response
-            combined_context = "\n\n".join(contexts[:3])
+            combined_context = "\n\n".join(filtered_contexts[:3])
             
             if GoogleTranslator is not None:
                 try:
