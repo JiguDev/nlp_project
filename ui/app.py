@@ -17,8 +17,7 @@ from retrieval.web_search import WebRetriever
 
 
 # =========================
-# Load config + retriever (only once)
-@st.cache_resource
+# Load config + retriever
 def init_system():
     config = load_config("configs/default.yaml")
     retriever = load_retriever(config)
@@ -41,7 +40,40 @@ default_lang = normalize_language_code(config["languages"]["default"])
 
 # =========================
 # UI Layout
-st.set_page_config(page_title="Gov Chatbot", page_icon="🇮🇳")
+st.set_page_config(page_title="Gov Chatbot", page_icon="🇮🇳", layout="centered")
+
+# Sidebar for controls
+with st.sidebar:
+    st.header("Chat Controls")
+    if st.button("🗑️ Clear Chat History"):
+        st.session_state.messages = []
+        st.rerun()
+
+# Custom CSS for Premium Look
+st.markdown("""
+    <style>
+    .stApp {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #f8fafc;
+    }
+    .stChatMessage {
+        border-radius: 15px;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    [data-testid="stChatMessageContent"] {
+        font-family: 'Inter', sans-serif;
+    }
+    .stChatInputContainer {
+        border-radius: 20px;
+    }
+    .stStatusWidget {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 st.title("🇮🇳 Multilingual Government Chatbot")
 st.write("Ask questions in English, Hindi, or Gujarati")
@@ -70,29 +102,38 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # Detect language
-    language = normalize_language_code(
-        detect_language(user_input, default=default_lang),
-        default=default_lang,
-    )
+    with st.status("Thinking...", expanded=True) as status:
+        st.write("🔍 Detecting language...")
+        # Detect language
+        language = normalize_language_code(
+            detect_language(user_input, default=default_lang),
+            default=default_lang,
+        )
 
-    if language not in supported_languages:
-        language = default_lang
+        if language not in supported_languages:
+            language = default_lang
+            
+        target_language = detect_target_language_override(user_input, language)
+
+        st.write("🌐 Searching the web for live information...")
+        # Web Scraping  (this is the PRIMARY source now)
+        web_contexts = web_retriever.search_all(user_input, top_k=3)
+
+        # Use web contexts as the sole source of truth
+        # Only fall back to local DB if web returns nothing
+        if web_contexts:
+            combined_contexts = web_contexts
+        else:
+            st.write("📚 Web search returned no results. Checking local database...")
+            results = retriever.retrieve(user_input, top_k=top_k * 5)
+            local_contexts = _select_language_matched_contexts(results, language, top_k)
+            combined_contexts = local_contexts
+
+        st.write("🧠 Synthesizing response...")
+        # Response
+        response = generator.generate(target_language, user_input, combined_contexts)
         
-    target_language = detect_target_language_override(user_input, language)
-
-    # Retrieval
-    results = retriever.retrieve(user_input, top_k=top_k * 5)
-    local_contexts = _select_language_matched_contexts(results, language, top_k)
-    
-    # Web Scraping
-    web_contexts = web_retriever.search_government_web(user_input, top_k=2)
-    
-    # Combine
-    combined_contexts = local_contexts + web_contexts
-
-    # Response
-    response = generator.generate(target_language, user_input, combined_contexts)
+        status.update(label="Complete!", state="complete", expanded=False)
 
     # Show bot response
     with st.chat_message("assistant"):
@@ -101,11 +142,10 @@ if user_input:
         full_response = ""
         words = response.split()
 
-        time.sleep(0.08)
         for word in words:
             full_response += word + " "
             message_placeholder.markdown(full_response + "▌")
-            time.sleep(0.08)  # speed control (reduce for faster)
+            time.sleep(0.04)  # speed control
 
         message_placeholder.markdown(full_response)
 

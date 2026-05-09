@@ -70,6 +70,13 @@ def build_tokenizer_corpus(data_dir: Path, output_path: Path) -> Path:
     process(hi_path, "hi")
     process(gu_path, "gu")
 
+    if not texts:
+        dummy_path = data_dir / "dummy" / "multilingual_corpus.txt"
+        if dummy_path.exists():
+            print(f"Fallback to dummy corpus: {dummy_path}")
+            # Just read it all as mixed or en for dummy purposes
+            process(dummy_path, "en")
+
     # Save corpus
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

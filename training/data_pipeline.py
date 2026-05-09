@@ -151,6 +151,12 @@ def main() -> None:
     if gu_path.exists():
         multilingual_records.extend(load_plain_text_corpus(gu_path, "gu", LIMIT))
 
+    if not multilingual_records:
+        dummy_path = data_dir / "dummy" / "multilingual_corpus.txt"
+        if dummy_path.exists():
+            print(f"Fallback to dummy corpus: {dummy_path}")
+            multilingual_records.extend(load_plain_text_corpus(dummy_path, "mixed", LIMIT))
+
     print(f"\nTotal multilingual samples: {len(multilingual_records)}\n")
 
     # =========================

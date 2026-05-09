@@ -117,24 +117,42 @@ class ChatbotGenerator:
         # we act as a "fully grown up variant" by using deep-translator to 
         # accurately convert the scraped RAG contexts into the target language.
         
-        if not context_str:
-            if language == "hi": return f"**[Native Model Output]**\n{output_text}\n\n**[Hybrid API Fallback]**\nमाफ़ कीजिए, इस प्रश्न के लिए सरकारी जानकारी उपलब्ध नहीं है।"
-            elif language == "gu": return f"**[Native Model Output]**\n{output_text}\n\n**[Hybrid API Fallback]**\nમાફ કરશો, આ પ્રશ્ન માટે સરકારી માહિતી ઉપલબ્ધ નથી."
-            return f"**[Native Model Output]**\n{output_text}\n\n**[Hybrid API Fallback]**\nSorry, no government information is available for this question."
+        if not contexts:
+            if language == "hi": 
+                return f"**🛑 माफ़ कीजिए**\nइस प्रश्न के लिए कोई आधिकारिक सरकारी जानकारी उपलब्ध नहीं है।"
+            elif language == "gu": 
+                return f"**🛑 માફ કરશો**\nઆ પ્રશ્ન માટે કોઈ સત્તાવાર સરકારી માહિતી ઉપલબ્ધ નથી।"
+            return f"**🛑 Sorry**\nNo official government information was found for this query."
         else:
-            # Use the best context block (first one) to generate a clean response
-            best_context = contexts[0] if contexts else context_str
+            # Aggregate multiple contexts for a more "explainative" response
+            combined_context = "\n\n".join(contexts[:3])
             
             if GoogleTranslator is not None:
                 try:
-                    translated = GoogleTranslator(source='auto', target=language).translate(best_context)
-                    if language == "hi": return f"**[Native Model Output]**\n{output_text}\n\n---\n\n**[Hybrid API Fallback] प्राप्त सरकारी जानकारी:**\n\n{translated}"
-                    elif language == "gu": return f"**[Native Model Output]**\n{output_text}\n\n---\n\n**[Hybrid API Fallback] સરકારી માહિતી અનુસાર:**\n\n{translated}"
-                    return f"**[Native Model Output]**\n{output_text}\n\n---\n\n**[Hybrid API Fallback] Based on Government Sources:**\n\n{translated}"
+                    # Translate the synthesis
+                    translated = GoogleTranslator(source='auto', target=language).translate(combined_context)
+                    
+                    # Structure the response
+                    if language == "hi":
+                        summary_label = "📌 **सारांश:**"
+                        details_label = "🔍 **विवरण:**"
+                    elif language == "gu":
+                        summary_label = "📌 **સારાંશ:**"
+                        details_label = "🔍 **વિગતો:**"
+                    else:
+                        summary_label = "📌 **Summary:**"
+                        details_label = "🔍 **Details:**"
+
+                    # Generate a simple "summary" by taking the first sentence of translation
+                    summary_sent = translated.split(".")[0] + "." if "." in translated else translated[:100] + "..."
+                    
+                    return f"{summary_label} {summary_sent}\n\n{details_label}\n{translated}"
+
                 except Exception as e:
                     print(f"[ERROR] Translation failed: {e}")
             
             # Ultimate fallback if translation fails or library missing
-            if language == "hi": return f"**[Native Model Output]**\n{output_text}\n\n---\n**[Hybrid API Fallback] उपलब्ध जानकारी (अनुवाद विफल):**\n\n{best_context}"
-            elif language == "gu": return f"**[Native Model Output]**\n{output_text}\n\n---\n**[Hybrid API Fallback] ઉપલબ્ધ માહિતી (અનુવાદ નિષ્ફળ):**\n\n{best_context}"
-            return f"**[Native Model Output]**\n{output_text}\n\n---\n**[Hybrid API Fallback] Available Information:**\n\n{best_context}"
+            if language == "hi": return f"**⚠️ उपलब्ध जानकारी:**\n\n{combined_context}"
+            elif language == "gu": return f"**⚠️ ઉપલબ્ધ માહિતી:**\n\n{combined_context}"
+            return f"**⚠️ Available Information:**\n\n{combined_context}"
+

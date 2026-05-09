@@ -1,7 +1,7 @@
 seed: 42
 
 tokenizer:
-  vocab_size: 32000
+  vocab_size: 200
   model_type: "unigram"
 
 paths:
