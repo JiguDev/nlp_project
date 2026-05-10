@@ -56,3 +56,16 @@ data/processed/
 # Ignore everything in the root data directory except for the dummy data
 data/*
 !data/dummy_data/
+
+# --- MODIFIED FOR DEPLOYMENT ---
+# Allow the processed data directory so GitHub can see your tokenizer
+!data/processed/
+
+# Allow specific model and index files
+!*.model
+!*.vocab
+!*.index
+
+# Still ignore raw large datasets to keep GitHub fast
+data/multilingual/
+data/raw/
