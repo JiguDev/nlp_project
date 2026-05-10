@@ -32,16 +32,20 @@ class ChatbotGenerator:
         # Load Model
         self.model = build_model(self.tokenizer, config["model"]).to(self.device)
         
-        # Load Fine-tuned Checkpoint
+        # Load Checkpoint (Optional for Deployment)
         checkpoint_path = Path(config["paths"]["finetune_checkpoint"])
         if not checkpoint_path.exists():
-            print(f"[WARN] Fine-tuned checkpoint not found at {checkpoint_path}. Attempting to use pretrain checkpoint.")
             checkpoint_path = Path(config["paths"]["pretrain_checkpoint"])
-            if not checkpoint_path.exists():
-                raise FileNotFoundError("Neither finetune nor pretrain checkpoints found. Please train the model first.")
         
-        print(f"[INFO] Loading generation model: {checkpoint_path}")
-        load_checkpoint(checkpoint_path, self.model, map_location=self.device)
+        if checkpoint_path.exists():
+            print(f"[INFO] Loading generation model: {checkpoint_path}")
+            try:
+                load_checkpoint(checkpoint_path, self.model, map_location=self.device)
+            except Exception as e:
+                print(f"[WARN] Failed to load checkpoint: {e}")
+        else:
+            print("[WARN] No model checkpoints found. Running in 'RAG-Only' mode for deployment.")
+        
         self.model.eval()
 
     def generate(self, language: str, question: str, contexts: List[str]) -> str:

@@ -65,6 +65,8 @@ data/*
 !*.model
 !*.vocab
 !*.index
+!*.pt
+!*.pth
 
 # Still ignore raw large datasets to keep GitHub fast
 data/multilingual/
